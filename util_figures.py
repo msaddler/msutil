@@ -132,11 +132,9 @@ def make_nervegram_plot(ax,
                         sr=20000,
                         cfs=None,
                         cmap=matplotlib.cm.gray,
-                        fontsize_title=12,
+                        cbar_on=False,
                         fontsize_labels=12,
-                        fontsize_legend=12,
                         fontsize_ticks=12,
-                        fontweight_title=None,
                         fontweight_labels=None,
                         nxticks=6,
                         nyticks=5,
@@ -146,15 +144,14 @@ def make_nervegram_plot(ax,
                         vmin=None,
                         vmax=None,
                         vticks=None,
-                        str_title=None,
-                        str_xlabel='Time (ms)',
-                        str_ylabel='Characteristic Frequency (Hz)',
-                        str_clabel=None):
+                        str_clabel=None,
+                        **kwargs_format_axes):
     '''
     Helper function for visualizing auditory nervegram (or similar) representation.
     '''
+    # Trim nervegram if tmin and tmax are specified
     nervegram = np.squeeze(nervegram)
-    assert len(nervegram.shape) == 2, "nervegram must be 2D array"
+    assert len(nervegram.shape) == 2, "nervegram must be freq-by-time array"
     t = np.arange(0, nervegram.shape[1]) / sr
     if (tmin is not None) and (tmax is not None):
         t_IDX = np.logical_and(t >= tmin, t < tmax)
@@ -162,6 +159,7 @@ def make_nervegram_plot(ax,
         nervegram = nervegram[:, t_IDX]
     if treset:
         t = t - t[0]
+    # Setup time and frequency ticks and labels
     time_idx = np.linspace(0, t.shape[0]-1, nxticks, dtype=int)
     time_labels = ['{:.0f}'.format(1e3 * t[itr0]) for itr0 in time_idx]
     if cfs is None:
@@ -171,7 +169,7 @@ def make_nervegram_plot(ax,
         assert cfs.shape[0] == nervegram.shape[0], "cfs.shape[0] must match nervegram.shape[0]"
     freq_idx = np.linspace(0, cfs.shape[0]-1, nyticks, dtype=int)
     freq_labels = ['{:.0f}'.format(cfs[itr0]) for itr0 in freq_idx]
-    
+    # Display nervegram image
     im_nervegram = ax.imshow(nervegram,
                              origin='lower',
                              aspect='auto',
@@ -179,10 +177,10 @@ def make_nervegram_plot(ax,
                              cmap=cmap,
                              vmin=vmin,
                              vmax=vmax)
-    
-    if str_clabel is not None:
+    # Add colorbar if `cbar_on == True`
+    if cbar_on:
         cbar = matplotlib.pyplot.colorbar(im_nervegram, ax=ax, pad=0.02)
-        cbar.ax.set_ylabel(str_clabel, fontsize=fontsize_labels)
+        cbar.ax.set_ylabel(str_clabel, fontsize=fontsize_labels, fontweight=fontweight_labels)
         if vticks is not None:
             cbar.set_ticks(vticks)
         else:
@@ -193,19 +191,14 @@ def make_nervegram_plot(ax,
                             labelsize=fontsize_ticks,
                             length=fontsize_ticks/2)
         cbar.ax.yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%03d'))
-    
+    # Format axes
     ax = format_axes(ax,
-                     str_title=str_title,
-                     str_xlabel=str_xlabel,
-                     str_ylabel=str_ylabel,
-                     fontsize_title=fontsize_title,
-                     fontsize_labels=fontsize_labels,
-                     fontsize_ticks=fontsize_ticks,
-                     fontweight_title=fontweight_title,
-                     fontweight_labels=fontweight_labels,
                      xticks=time_idx,
                      yticks=freq_idx,
                      xticklabels=time_labels,
-                     yticklabels=freq_labels)
-    
+                     yticklabels=freq_labels,
+                     fontsize_labels=fontsize_labels,
+                     fontsize_ticks=fontsize_ticks,
+                     fontweight_labels=fontweight_labels,
+                     **kwargs_format_axes)
     return ax
