@@ -7,6 +7,8 @@ import matplotlib.ticker
 import matplotlib.cm
 import matplotlib.colors
 
+import util_stimuli
+
 
 def get_color_list(num_colors, cmap_name='Accent'):
     '''
@@ -98,7 +100,7 @@ def format_axes(ax,
 def make_line_plot(ax,
                    x,
                    y,
-                   legend_on=True,
+                   legend_on=False,
                    kwargs_plot={},
                    kwargs_legend={},
                    **kwargs_format_axes):
@@ -202,3 +204,153 @@ def make_nervegram_plot(ax,
                      fontweight_labels=fontweight_labels,
                      **kwargs_format_axes)
     return ax
+
+
+def make_stimulus_summary_plot(ax_arr,
+                                      ax_idx_waveform=None,
+                                      ax_idx_spectrum=None,
+                                      ax_idx_nervegram=None,
+                                      ax_idx_excitation=None,
+                                      waveform=None,
+                                      nervegram=None,
+                                      sr_waveform=None,
+                                      sr_nervegram=None,
+                                      cfs=None,
+                                      tmin=None,
+                                      tmax=None,
+                                      treset=True,
+                                      vmin=None,
+                                      vmax=None,
+                                      spines_to_hide_waveform=[],
+                                      spines_to_hide_spectrum=[],
+                                      spines_to_hide_excitation=[],
+                                      nxticks=6,
+                                      nyticks=6,
+                                      kwargs_plot={},
+                                      limits_buffer=0.1,
+                                      ax_arr_clear_leftover=True,
+                                      **kwargs_format_axes):
+    '''
+    Helper function for generating waveform, power spectrum, nervegram, and excitation pattern
+    plots to summarize a stimulus.
+    '''
+    # Axes are tracked in flattened array
+    ax_arr = np.array([ax_arr]).reshape([-1])
+    assert len(ax_arr.shape) == 1
+    ax_idx_list = []
+    
+    # Plot stimulus waveform
+    if ax_idx_waveform is not None:
+        ax_idx_list.append(ax_idx_waveform)
+        y_wav = np.squeeze(waveform)
+        assert len(y_wav.shape) == 1, "waveform must be 1D array"
+        x_wav = np.arange(0, y_wav.shape[0]) / sr_waveform
+        if (tmin is not None) and (tmax is not None):
+            IDX = np.logical_and(x_wav >= tmin, x_wav < tmax)
+            x_wav = x_wav[IDX]
+            y_wav = y_wav[IDX]
+        if treset:
+            x_wav = x_wav - x_wav[0]
+        xlimits_wav = [x_wav[0], x_wav[-1]]
+        ylimits_wav = [np.max(np.abs(y_wav)), -np.max(np.abs(y_wav))]
+        ylimits_wav = np.array(ylimits_wav) * (1 + limits_buffer)
+        make_line_plot(ax_arr[ax_idx_waveform],
+                       x_wav,
+                       y_wav,
+                       legend_on=False,
+                       kwargs_plot=kwargs_plot,
+                       kwargs_legend={},
+                       xlimits=xlimits_wav,
+                       ylimits=ylimits_wav,
+                       xticks=[],
+                       yticks=[],
+                       xticklabels=[],
+                       yticklabels=[],
+                       spines_to_hide=spines_to_hide_waveform,
+                       **kwargs_format_axes)
+    
+    # Plot stimulus power spectrum
+    if ax_idx_spectrum is not None:
+        ax_idx_list.append(ax_idx_spectrum)
+        fxx, pxx = util_stimuli.power_spectrum(waveform, sr_waveform)
+        if cfs is not None:
+            IDX = np.logical_and(fxx >= np.min(cfs), fxx <= np.max(cfs))
+            pxx = pxx[IDX]
+            fxx = fxx[IDX]
+        fxx = util_stimuli.freq2erb(fxx)
+        xlimits_buffer_pxx = limits_buffer * np.max(pxx)
+        ylimits_fxx = [np.min(fxx), np.max(fxx)]
+        xlimits_pxx = [np.max(pxx) + xlimits_buffer_pxx, np.min(pxx) - xlimits_buffer_pxx] # Reverses x-axis
+        xlimits_pxx[-1] = 0
+        yticks = np.linspace(ylimits_fxx[0], ylimits_fxx[-1], nyticks)
+        yticklabels = ['{:.0f}'.format(yt) for yt in util_stimuli.erb2freq(yticks)]
+        make_line_plot(ax_arr[ax_idx_spectrum],
+                       pxx,
+                       fxx,
+                       legend_on=False,
+                       kwargs_plot=kwargs_plot,
+                       str_ylabel='Frequency (Hz)',
+                       xlimits=xlimits_pxx,
+                       ylimits=ylimits_fxx,
+                       xticks=[],
+                       yticks=yticks,
+                       xticklabels=[],
+                       yticklabels=yticklabels,
+                       spines_to_hide=spines_to_hide_spectrum,
+                       **kwargs_format_axes)
+    
+    # Plot stimulus nervegram
+    if ax_idx_nervegram is not None:
+        ax_idx_list.append(ax_idx_nervegram)
+        if ax_idx_spectrum is not None:
+            nervegram_nxticks = nxticks
+            nervegram_nyticks = 0
+            nervegram_str_xlabel = 'Time (ms)'
+            nervegram_str_ylabel = None
+        else:
+            nervegram_nxticks = nxticks
+            nervegram_nyticks = nyticks
+            nervegram_str_xlabel = 'Time (ms)'
+            nervegram_str_ylabel = 'Characteristic frequency (Hz)'
+        make_nervegram_plot(ax_arr[ax_idx_nervegram],
+                            nervegram,
+                            sr=sr_nervegram,
+                            cfs=cfs,
+                            nxticks=nervegram_nxticks,
+                            nyticks=nervegram_nyticks,
+                            tmin=tmin,
+                            tmax=tmax,
+                            treset=treset,
+                            vmin=vmin,
+                            vmax=vmax,
+                            str_xlabel=nervegram_str_xlabel,
+                            str_ylabel=nervegram_str_ylabel)
+    
+    # Plot stimulus excitation pattern
+    if ax_idx_excitation is not None:
+        ax_idx_list.append(ax_idx_excitation)
+        x_exc = np.mean(nervegram, axis=1)
+        y_exc = np.arange(0, nervegram.shape[0])
+        xlimits_exc_buffer = limits_buffer * np.max(x_exc)
+        xlimits_exc = [np.min(x_exc) - xlimits_exc_buffer, np.max(x_exc) + xlimits_exc_buffer]
+        ylimits_exc = [np.min(y_exc), np.max(y_exc)]
+        make_line_plot(ax_arr[ax_idx_excitation],
+                       x_exc,
+                       y_exc,
+                       legend_on=False,
+                       kwargs_plot=kwargs_plot,
+                       xlimits=xlimits_exc,
+                       ylimits=ylimits_exc,
+                       xticks=[],
+                       yticks=[],
+                       xticklabels=[],
+                       yticklabels=yticklabels,
+                       spines_to_hide=spines_to_hide_excitation,
+                       **kwargs_format_axes)
+    
+    # Clear unused axes in ax_arr
+    if ax_arr_clear_leftover:
+        for ax_idx in range(ax_arr.shape[0]):
+            if ax_idx not in ax_idx_list:
+                ax_arr[ax_idx].axis('off')
+    return ax_arr
