@@ -1,6 +1,49 @@
 import sys
 import os
+import h5py
+import copy
+import collections
 import numpy as np
+
+
+def recursive_dict_merge(dict1, dict2):
+    '''
+    Returns a new dictionary by merging two dictionaries recursively.
+    This function is useful for minimally updating dict1 with dict2.
+    '''
+    result = copy.deepcopy(dict1)
+    for key, value in dict2.items():
+        if isinstance(value, collections.Mapping):
+            result[key] = recursive_dict_merge(result.get(key, {}), value)
+        else:
+            result[key] = copy.deepcopy(dict2[key])
+    return result
+
+
+def get_hdf5_dataset_key_list(f_input):
+    '''
+    Walks hdf5 file and returns list of all dataset keys.
+    
+    Args
+    ----
+    f_input (str or h5py.File): hdf5 filename or file object
+    
+    Returns
+    -------
+    hdf5_dataset_key_list (list): list of paths to datasets in f_input
+    '''
+    if isinstance(f_input, str):
+        f = h5py.File(f_input, 'r')
+    else:
+        f = f_input
+    hdf5_dataset_key_list = []
+    def get_dataset_keys(name, node):
+        if isinstance(node, h5py.Dataset):
+            hdf5_dataset_key_list.append(name)
+    f.visititems(get_dataset_keys)
+    if isinstance(f_input, str):
+        f.close()
+    return hdf5_dataset_key_list
 
 
 def rms(x):
@@ -212,3 +255,22 @@ def erb2freq(erb):
     Glasberg & Moore (1990, Hearing Research) equation 4.
     '''
     return (1.0/0.00437) * (np.power(10.0, (erb / 21.4)) - 1.0)
+
+
+def erbspace(freq_min, freq_max, num):
+    '''
+    Helper function to get array of frequencies linearly spaced on an ERB scale.
+    
+    Args
+    ----
+    freq_min (float): minimum frequency in Hz
+    freq_max (float): maximum frequency Hz
+    num (int): number of frequencies (length of array)
+    
+    Returns
+    -------
+    freqs (np.ndarray): array of ERB-spaced frequencies (lowest to highest) in Hz
+    '''
+    freqs = np.linspace(freq2erb(freq_min), freq2erb(freq_max), num=num)
+    freqs = erb2freq(freqs)
+    return freqs
