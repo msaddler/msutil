@@ -20,26 +20,37 @@ def set_dBSPL(x, dBSPL):
     return rms_out * x / rms(x)
 
 
-def combine_signal_and_noise(signal, noise, snr, rms_out=0.02):
+def combine_signal_and_noise(signal, noise, snr, mean_subtract=True):
     '''
-    Combine signal and noise with specified SNR.
+    Adds noise to signal with the specified signal-to-noise ratio (snr).
+    If snr is finite, the noise waveform is rescaled and added to the
+    signal waveform. If snr is positive infinity, returned waveform is
+    equal to the signal waveform. If snr is negative inifinity, returned
+    waveform is equal to the noise waveform.
     
     Args
     ----
-    signal (np array): signal waveform
-    noise (np array): noise waveform
-    snr (float): signal to noise ratio in dB
-    rms_out (float): rms amplitude of returned waveform
+    signal (np.ndarray): signal waveform
+    noise (np.ndarray): noise waveform
+    snr (float): signal-to-noise ratio in dB
+    mean_subtract (bool): if True, signal and noise are first de-meaned
+        (mean_subtract=True is important for accurate snr computation)
     
     Returns
     -------
-    signal_and_noise (np array) signal in noise waveform
+    signal_and_noise (np.ndarray) signal in noise waveform
     '''
-    signal = signal / rms(signal)
-    noise = noise / rms(noise)
-    signal_and_noise = (np.power(10, snr / 20) * signal) + noise
-    signal_and_noise = signal_and_noise / rms(signal_and_noise)
-    return rms_out * signal_and_noise
+    if mean_subtract:
+        signal = signal - np.mean(signal)
+        noise = noise - np.mean(noise)        
+    if np.isinf(snr) and snr > 0:
+        signal_and_noise = signal
+    elif np.isinf(snr) and snr < 0:
+        signal_and_noise = noise
+    else:
+        rms_noise_scaling = rms(signal) / (rms(noise) * np.power(10, snr / 20))
+        signal_and_noise = signal + rms_noise_scaling * noise
+    return signal_and_noise
 
 
 def power_spectrum(x, fs, rfft=True, dBSPL=True):
