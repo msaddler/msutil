@@ -5,17 +5,30 @@ import numpy as np
 
 def rms(x):
     '''
-    Returns root mean square amplitude of x (raises ValueError if NaN)
+    Returns root mean square amplitude of x (raises ValueError if NaN).
     '''
     out = np.sqrt(np.mean(np.square(x)))
-    if np.isnan(out): raise ValueError('rms calculation resulted in NaN')
+    if np.isnan(out):
+        raise ValueError('rms calculation resulted in NaN')
     return out
 
 
-def set_dBSPL(x, dBSPL):
+def get_dBSPL(x, mean_subtract=True):
     '''
-    Returns x re-scaled to specified SPL in dB re 20e-6 Pa
+    Returns sound pressure level of x in dB re 20e-6 Pa (dB SPL).
     '''
+    if mean_subtract:
+        x = x - np.mean(x)
+    out = 20 * np.log10(rms(x) / 20e-6)
+    return out
+
+
+def set_dBSPL(x, dBSPL, mean_subtract=True):
+    '''
+    Returns x re-scaled to specified SPL in dB re 20e-6 Pa.
+    '''
+    if mean_subtract:
+        x = x - np.mean(x)
     rms_out = 20e-6 * np.power(10, dBSPL/20)
     return rms_out * x / rms(x)
 
@@ -81,8 +94,15 @@ def power_spectrum(x, fs, rfft=True, dBSPL=True):
     return freqs, power_spectrum
 
 
-def complex_tone(f0, fs, dur, harmonic_numbers=[1], frequencies=None, amplitudes=None, phase_mode='sine',
-                 offset_start=True, strict_nyquist=True):
+def complex_tone(f0,
+                 fs,
+                 dur,
+                 harmonic_numbers=[1],
+                 frequencies=None,
+                 amplitudes=None,
+                 phase_mode='sine',
+                 offset_start=True,
+                 strict_nyquist=True):
     '''
     Function generates a complex harmonic tone with specified relative phase
     and component amplitudes.
