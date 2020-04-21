@@ -231,23 +231,30 @@ def modified_uniform_masking_noise(fs, dur, dBHzSPL=15.0, attenuation_start=600.
 
 def freq2erb(freq):
     '''
-    Helper function converts frequency from Hz to number of ERBs.
-    Glasberg & Moore (1990, Hearing Research) equation 4.
+    Helper function converts frequency from Hz to ERB-number scale.
+    Glasberg & Moore (1990, Hearing Research) equation 4. The ERB-
+    number scale can be defined as the number of equivalent
+    rectangular bandwidths below the given frequency (units of the
+    ERB-number scale are Cams).
     '''
     return 21.4 * np.log10(0.00437 * freq + 1.0)
 
 
 def erb2freq(erb):
     '''
-    Helper function converts frequency from number of ERBs to Hz.
-    Glasberg & Moore (1990, Hearing Research) equation 4.
+    Helper function converts frequency from ERB-number scale to Hz.
+    Glasberg & Moore (1990, Hearing Research) equation 4. The ERB-
+    number scale can be defined as the number of equivalent
+    rectangular bandwidths below the given frequency (units of the
+    ERB-number scale are Cams).
     '''
     return (1.0/0.00437) * (np.power(10.0, (erb / 21.4)) - 1.0)
 
 
 def erbspace(freq_min, freq_max, num):
     '''
-    Helper function to get array of frequencies linearly spaced on an ERB scale.
+    Helper function to get array of frequencies linearly spaced on an
+    ERB-number scale.
     
     Args
     ----
@@ -262,3 +269,118 @@ def erbspace(freq_min, freq_max, num):
     freqs = np.linspace(freq2erb(freq_min), freq2erb(freq_max), num=num)
     freqs = erb2freq(freqs)
     return freqs
+
+
+def findnextpow2(x):
+    '''
+    Helper function returns next power of 2 >= x.
+    '''
+    nextpow2 = 0
+    while 2 ** nextpow2 < x:
+        nextpow2 += 1
+    return 2 ** nextpow2
+
+
+def TENoise(fs,
+            dur,
+            lco=None,
+            hco=None,
+            dBSPL_per_ERB=70.0,
+            circular=False):
+    '''
+    Generates threshold equalizing noise (Moore et al. 1997) in the spectral
+    domain with specified sampling rate, duration, cutoff frequencies, and
+    level. TENoise produces equal masked thresholds for normal hearing
+    listeners for all frequencies between 125 Hz and 15 kHz. Assumption:
+    power of the signal at threshold (Ps) is given by the equation,
+    Ps = No*K*ERB, where No is the noise power spectral density and K is the
+    signal to noise ratio at the output of the auditory filter required for
+    threshold. TENoise is spectrally shaped so that No*K*ERB is constant.
+    Values for K and ERB are taken from Moore et al. (1997).
+    
+    Based on MATLAB code last modified by A. Oxenham (2007-JAN-30).
+    Modified Python implementation by M. Saddler (2020-APR-21).
+    
+    Args
+    ----
+    fs (int): sampling rate in Hz
+    dur (float): duration of noise (s)
+    lco (float): low cutoff frequency in Hz (defaults to 0.0)
+    hco (float): high cutoff frequency in Hz (defaults to fs/2)
+    dBSPL_per_ERB (float): level of TENoise is specified in terms of the
+        level of a one-ERB-wide band around 1 kHz in units dB re 20e-6 Pa
+    circular (bool): if True, buffer will be periodic; if False, fft is done
+        on a power-of-2 vector and truncated to desired length (faster)
+    
+    Returns
+    -------
+    noise (np.ndarray): noise waveform in units of Pa
+    '''
+    # Set parameters for synthesizing TENoise
+    dur_samples = int(np.round(dur * fs))
+    if lco is None:
+        lco = 0.0 
+    if hco is None:
+        hco = fs / 2.0
+    if circular:
+        nfft = dur_samples
+    else:
+        nfft = findnextpow2(dur_samples)
+    
+    # K values are from a personal correspondance between B.C.J. Moore
+    # and A. Oxenham. A also figure appears in Moore et al. (1997).
+    K = np.array([
+        [0.0500,   13.5000],
+        [0.0630,   10.0000],
+        [0.0800,   7.2000],
+        [0.1000,   4.9000],
+        [0.1250,   3.1000],
+        [0.1600,   1.6000],
+        [0.2000,   0.4000],
+        [0.2500,  -0.4000],
+        [0.3150,  -1.2000],
+        [0.4000,  -1.8500],
+        [0.5000,  -2.4000],
+        [0.6300,  -2.7000],
+        [0.7500,  -2.8500],
+        [0.8000,  -2.9000],
+        [1.0000,  -3.0000],
+        [1.1000,  -3.0000],
+        [2.0000,  -3.0000],
+        [4.0000,  -3.0000],
+        [8.0000,  -3.0000],
+        [10.0000, -3.0000],
+        [15.0000, -3.0000],
+    ])
+    
+    # K values are interpolated over rfft frequency vector
+    f_interp_K = scipy.interpolate.interp1d(K[:, 0], K[:, 1],
+                                            kind='cubic',
+                                            bounds_error=False,
+                                            fill_value='extrapolate')
+    freq = np.fft.rfftfreq(nfft, d=1/fs)
+    KdB = f_interp_K(freq / 1000)
+    
+    # Calculate ERB at each frequency and compute TENoise PSD
+    ERB = 24.7 * ((4.37 * freq / 1000) + 1) # Glasberg & Moore (1990) equation 3
+    TEN_No = -1 * (KdB + (10 * np.log10(ERB))) # Units: dB/Hz re 1
+    
+    # Generate random noise_rfft vector and scale to TENoise PSD between lco and hco
+    freq_idx = np.logical_and(freq > lco, freq < hco)
+    a = np.zeros_like(freq)
+    b = np.zeros_like(freq)
+    a[freq_idx] = np.random.randn(np.sum(freq_idx))
+    b[freq_idx] = np.random.randn(np.sum(freq_idx))
+    noise_rfft = a + 1j*b
+    noise_rfft[freq_idx] = noise_rfft[freq_idx] * np.power(10, (TEN_No[freq_idx] / 20))
+    
+    # Estimate power in ERB centered at 1 kHz and compute scale factor for desired dBSPL_per_ERB
+    freq_idx_1kHz_ERB = np.logical_and(freq>935.0, freq<1068.1)
+    power_1kHz_ERB = 2 * np.sum(np.square(np.abs(noise_rfft[freq_idx_1kHz_ERB]))) / np.square(nfft)
+    dBSPL_power_1kHz_ERB = 10 * np.log10(power_1kHz_ERB / np.square(20e-6))
+    amplitude_scale_factor = np.power(10, (dBSPL_per_ERB - dBSPL_power_1kHz_ERB) / 20)
+    
+    # Generate noise signal with irrft (truncate to dur_samples), scale to desired dBSPL_per_ERB
+    noise = np.fft.irfft(noise_rfft)[:dur_samples]
+    noise = noise * amplitude_scale_factor
+    return noise
