@@ -72,15 +72,15 @@ def power_spectrum(x, fs, rfft=True, dBSPL=True):
     
     Args
     ----
-    x (np array): input waveform (units Pa)
+    x (np.ndarray): input waveform (Pa)
     fs (int): sampling rate (Hz)
-    rfft (bool): if True, only positive half of power spectra is returned
+    rfft (bool): if True, only positive half of power spectrum is returned
     dBSPL (bool): if True, power spectrum is rescaled to dB re 20e-6 Pa
     
     Returns
     -------
-    freqs (np array): frequency vector (Hz)
-    power_spectrum (np array): power spectrum (Pa^2/Hz or dB/Hz SPL)
+    freqs (np.ndarray): frequency vector (Hz)
+    power_spectrum (np.ndarray): power spectrum (Pa^2/Hz or dB/Hz SPL)
     '''
     if rfft:
         power_spectrum = np.square(np.abs(np.fft.rfft(x)))
@@ -92,6 +92,42 @@ def power_spectrum(x, fs, rfft=True, dBSPL=True):
     if dBSPL:
         power_spectrum = 10. * np.log10(power_spectrum / np.square(20e-6)) 
     return freqs, power_spectrum
+
+
+def get_bandlimited_power(x, fs, band=None, rfft=True, dBSPL=True):
+    '''
+    Helper function for computing power of a signal in a specified frequency band.
+    
+    Args
+    ----
+    x (np.ndarray): input waveform (Pa)
+    fs (int): sampling rate (Hz)
+    band (list): frequency band [low_cutoff, high_cutoff] (Hz)
+    rfft (bool): if True, only positive half of spectral domain is used
+    dBSPL (bool): if True, returned power is rescaled to dB re 20e-6 Pa
+    
+    Returns
+    -------
+    bandlimited_power (float): signal power in frequency band (Pa^2 or dB SPL)
+    '''
+    if band is None:
+        band = [0.0, fs/2]
+    assert len(band) == 2, "`band` must have length 2: [low_cutoff, high_cutoff]"
+    if rfft:
+        X = np.fft.rfft(x)
+        freqs = np.fft.rfftfreq(len(x), d=1/fs)
+        freqs_band_idx = np.logical_and(freqs >= band[0], freqs < band[1])
+    else:
+        X = np.fft.fft(x)
+        freqs = np.fft.fftfreq(len(x), d=1/fs)
+        freqs_band_idx = np.logical_and(np.abs(freqs) >= band[0], np.abs(freqs) < band[1])
+    
+    bandlimited_power = np.sum(np.square(np.abs(X[freqs_band_idx]))) / np.square(len(x))
+    if rfft:
+        bandlimited_power = 2 * bandlimited_power # 2x since rfft computes half of spectrum
+    if dBSPL:
+        bandlimited_power = 10. * np.log10(bandlimited_power / np.square(20e-6))
+    return bandlimited_power
 
 
 def complex_tone(f0,
@@ -122,7 +158,7 @@ def complex_tone(f0,
     
     Returns
     -------
-    signal (np array): complex tone
+    signal (np.ndarray): complex tone
     '''
     # Time vector has step size 1/fs and is of length int(dur*fs)
     t = np.arange(0, dur, 1/fs)[0:int(dur*fs)]
@@ -178,7 +214,7 @@ def flat_spectrum_noise(fs, dur, dBHzSPL=15.0):
     
     Returns
     -------
-    (np array): noise waveform (Pa)
+    (np.ndarray): noise waveform (Pa)
     '''
     # Create flat-spectrum noise in the frequency domain
     fxx = np.ones(int(dur*fs), dtype=np.complex128)
@@ -215,7 +251,7 @@ def modified_uniform_masking_noise(fs, dur, dBHzSPL=15.0, attenuation_start=600.
     
     Returns
     -------
-    (np array): noise waveform (Pa)
+    (np.ndarray): noise waveform (Pa)
     '''
     x = flat_spectrum_noise(fs, dur, dBHzSPL=dBHzSPL)
     fxx = np.fft.fft(x)
