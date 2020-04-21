@@ -1,6 +1,7 @@
 import sys
 import os
 import numpy as np
+import scipy.interpolate
 
 
 def rms(x):
@@ -307,22 +308,11 @@ def erbspace(freq_min, freq_max, num):
     return freqs
 
 
-def findnextpow2(x):
-    '''
-    Helper function returns next power of 2 >= x.
-    '''
-    nextpow2 = 0
-    while 2 ** nextpow2 < x:
-        nextpow2 += 1
-    return 2 ** nextpow2
-
-
 def TENoise(fs,
             dur,
             lco=None,
             hco=None,
-            dBSPL_per_ERB=70.0,
-            circular=False):
+            dBSPL_per_ERB=70.0):
     '''
     Generates threshold equalizing noise (Moore et al. 1997) in the spectral
     domain with specified sampling rate, duration, cutoff frequencies, and
@@ -345,23 +335,17 @@ def TENoise(fs,
     hco (float): high cutoff frequency in Hz (defaults to fs/2)
     dBSPL_per_ERB (float): level of TENoise is specified in terms of the
         level of a one-ERB-wide band around 1 kHz in units dB re 20e-6 Pa
-    circular (bool): if True, buffer will be periodic; if False, fft is done
-        on a power-of-2 vector and truncated to desired length (faster)
     
     Returns
     -------
     noise (np.ndarray): noise waveform in units of Pa
     '''
     # Set parameters for synthesizing TENoise
-    dur_samples = int(np.round(dur * fs))
+    nfft = int(dur * fs) # nfft = duration in number of samples
     if lco is None:
         lco = 0.0 
     if hco is None:
         hco = fs / 2.0
-    if circular:
-        nfft = dur_samples
-    else:
-        nfft = findnextpow2(dur_samples)
     
     # K values are from a personal correspondance between B.C.J. Moore
     # and A. Oxenham. A also figure appears in Moore et al. (1997).
@@ -416,7 +400,7 @@ def TENoise(fs,
     dBSPL_power_1kHz_ERB = 10 * np.log10(power_1kHz_ERB / np.square(20e-6))
     amplitude_scale_factor = np.power(10, (dBSPL_per_ERB - dBSPL_power_1kHz_ERB) / 20)
     
-    # Generate noise signal with irrft (truncate to dur_samples), scale to desired dBSPL_per_ERB
-    noise = np.fft.irfft(noise_rfft)[:dur_samples]
+    # Generate noise signal with inverse rfft, scale to desired dBSPL_per_ERB
+    noise = np.fft.irfft(noise_rfft)
     noise = noise * amplitude_scale_factor
     return noise
