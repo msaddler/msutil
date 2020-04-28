@@ -17,7 +17,7 @@ def get_color_list(num_colors, cmap_name='Accent'):
     if isinstance(cmap_name, list):
         return cmap_name
     cmap = matplotlib.pyplot.get_cmap(cmap_name)
-    norm = matplotlib.colors.Normalize(vmin=0, vmax=num_colors)
+    norm = matplotlib.colors.Normalize(vmin=0, vmax=num_colors-1)
     scalar_map = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
     color_list = [scalar_map.to_rgba(x) for x in range(num_colors)]
     return color_list
