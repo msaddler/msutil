@@ -280,8 +280,8 @@ def make_stimulus_summary_plot(ax_arr,
         fxx = util_stimuli.freq2erb(fxx)
         xlimits_buffer_pxx = limits_buffer * np.max(pxx)
         ylimits_fxx = [np.min(fxx), np.max(fxx)]
-        xlimits_pxx = [np.max(pxx) + xlimits_buffer_pxx, np.min(pxx) - xlimits_buffer_pxx] # Reverses x-axis
-        xlimits_pxx[-1] = 0
+        xlimits_pxx = [np.max(pxx) * (1 + limits_buffer), 0] # Reverses x-axis
+        xlimits_pxx = np.ceil(np.array(xlimits_pxx) * 5) / 5
         yticks = np.linspace(ylimits_fxx[0], ylimits_fxx[-1], nyticks)
         yticklabels = ['{:.0f}'.format(yt) for yt in util_stimuli.erb2freq(yticks)]
         make_line_plot(ax_arr[ax_idx_spectrum],
@@ -289,12 +289,13 @@ def make_stimulus_summary_plot(ax_arr,
                        fxx,
                        legend_on=False,
                        kwargs_plot=kwargs_plot,
+                       str_xlabel='Power\n(dB/Hz SPL)',
                        str_ylabel='Frequency (Hz)',
                        xlimits=xlimits_pxx,
                        ylimits=ylimits_fxx,
-                       xticks=[],
+                       xticks=xlimits_pxx,
                        yticks=yticks,
-                       xticklabels=[],
+                       xticklabels=xlimits_pxx.astype(int),
                        yticklabels=yticklabels,
                        spines_to_hide=spines_to_hide_spectrum,
                        **kwargs_format_axes)
@@ -305,7 +306,7 @@ def make_stimulus_summary_plot(ax_arr,
         if ax_idx_spectrum is not None:
             nervegram_nxticks = nxticks
             nervegram_nyticks = 0
-            nervegram_str_xlabel = 'Time (ms)'
+            nervegram_str_xlabel = 'Time\n(ms)'
             nervegram_str_ylabel = None
         else:
             nervegram_nxticks = nxticks
@@ -331,20 +332,21 @@ def make_stimulus_summary_plot(ax_arr,
         ax_idx_list.append(ax_idx_excitation)
         x_exc = np.mean(nervegram, axis=1)
         y_exc = np.arange(0, nervegram.shape[0])
-        xlimits_exc_buffer = limits_buffer * np.max(x_exc)
-        xlimits_exc = [np.min(x_exc) - xlimits_exc_buffer, np.max(x_exc) + xlimits_exc_buffer]
+        xlimits_exc = [0, np.max(x_exc) * (1 + limits_buffer)]
+        xlimits_exc = np.ceil(np.array(xlimits_exc)/10) * 10
         ylimits_exc = [np.min(y_exc), np.max(y_exc)]
         make_line_plot(ax_arr[ax_idx_excitation],
                        x_exc,
                        y_exc,
                        legend_on=False,
                        kwargs_plot=kwargs_plot,
+                       str_xlabel='Excitation\n(spikes/s)',
                        xlimits=xlimits_exc,
                        ylimits=ylimits_exc,
-                       xticks=[],
+                       xticks=xlimits_exc,
                        yticks=[],
-                       xticklabels=[],
-                       yticklabels=yticklabels,
+                       xticklabels=xlimits_exc.astype(int),
+                       yticklabels=[],
                        spines_to_hide=spines_to_hide_excitation,
                        **kwargs_format_axes)
     
