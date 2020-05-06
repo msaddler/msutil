@@ -60,6 +60,9 @@ def process_cnn_layer_list(brain_net_architecture,
     for brain_arch_layer in brain_arch_layer_list:
         layer_name = brain_arch_layer['args']['name']
         layer_type = brain_arch_layer['layer_type']
+        if isinstance(nets[layer_name], dict):
+            # Quick patch for dealing with multiple task outputs in network (grabs first)
+            nets[layer_name] = nets[layer_name][sorted(nets[layer_name].keys())[0]]
         shape_activations = nets[layer_name].shape.as_list()
         shape_activations.pop(0)
         layer_dict = {
