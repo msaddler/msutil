@@ -76,20 +76,20 @@ def power_spectrum(x, fs, rfft=True, dBSPL=True):
     x (np.ndarray): input waveform (Pa)
     fs (int): sampling rate (Hz)
     rfft (bool): if True, only positive half of power spectrum is returned
-    dBSPL (bool): if True, power spectrum is rescaled to dB re 20e-6 Pa
+    dBSPL (bool): if True, power spectrum has units dB re 20e-6 Pa
     
     Returns
     -------
     freqs (np.ndarray): frequency vector (Hz)
-    power_spectrum (np.ndarray): power spectrum (Pa^2/Hz or dB/Hz SPL)
+    power_spectrum (np.ndarray): power spectrum (Pa^2 or dB SPL)
     '''
     if rfft:
-        power_spectrum = np.square(np.abs(np.fft.rfft(x)))
+        # Power is doubled since rfft computes only positive half of spectrum
+        power_spectrum = 2 * np.square(np.abs(np.fft.rfft(x) / len(x)))
         freqs = np.fft.rfftfreq(len(x), d=1/fs)
     else:
-        power_spectrum = np.square(np.abs(np.fft.fft(x)))
+        power_spectrum = np.square(np.abs(np.fft.fft(x) / len(x)))
         freqs = np.fft.fftfreq(len(x), d=1/fs)
-    power_spectrum = power_spectrum / (fs * len(x)) # Rescale to PSD
     if dBSPL:
         power_spectrum = 10. * np.log10(power_spectrum / np.square(20e-6)) 
     return freqs, power_spectrum
@@ -115,17 +115,17 @@ def get_bandlimited_power(x, fs, band=None, rfft=True, dBSPL=True):
         band = [0.0, fs/2]
     assert len(band) == 2, "`band` must have length 2: [low_cutoff, high_cutoff]"
     if rfft:
-        X = np.fft.rfft(x)
+        X = np.fft.rfft(x) / len(x)
         freqs = np.fft.rfftfreq(len(x), d=1/fs)
         freqs_band_idx = np.logical_and(freqs >= band[0], freqs < band[1])
     else:
-        X = np.fft.fft(x)
+        X = np.fft.fft(x) / len(x)
         freqs = np.fft.fftfreq(len(x), d=1/fs)
         freqs_band_idx = np.logical_and(np.abs(freqs) >= band[0], np.abs(freqs) < band[1])
-    
-    bandlimited_power = np.sum(np.square(np.abs(X[freqs_band_idx]))) / np.square(len(x))
+    bandlimited_power = np.sum(np.square(np.abs(X[freqs_band_idx])))
     if rfft:
-        bandlimited_power = 2 * bandlimited_power # 2x since rfft computes half of spectrum
+        # Power is doubled since rfft computes only positive half of spectrum
+        bandlimited_power = 2 * bandlimited_power
     if dBSPL:
         bandlimited_power = 10. * np.log10(bandlimited_power / np.square(20e-6))
     return bandlimited_power
