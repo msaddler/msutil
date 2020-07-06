@@ -72,6 +72,8 @@ def process_cnn_layer_list(brain_net_architecture,
         }
         if 'kernel_size' in brain_arch_layer['args']:
             layer_dict['shape_kernel'] = brain_arch_layer['args']['kernel_size']
+        if 'strides' in brain_arch_layer['args']:
+            layer_dict['strides'] = brain_arch_layer['args']['strides']
         list_layer_dict.append(layer_dict)
     return list_layer_dict
 
