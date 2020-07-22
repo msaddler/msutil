@@ -2,6 +2,7 @@ import sys
 import os
 import numpy as np
 import scipy.interpolate
+import scipy.signal
 
 
 def rms(x):
@@ -404,3 +405,59 @@ def TENoise(fs,
     noise = np.fft.irfft(noise_rfft)
     noise = noise * amplitude_scale_factor
     return noise
+
+
+def get_spectral_envelope_lp_coefficients(x, M=12):
+    '''
+    Computes "Linear Prediction Coefficients" for spectral envelope extraction.
+    Implementation is ported from:
+    https://ccrma.stanford.edu/~jos/sasp/Spectral_Envelope_Linear_Prediction.html
+    
+    Args
+    ----
+    x (np.ndarray): input waveform (Pa)
+    M (int): order of the linear predictor
+    
+    Returns
+    -------
+    b_lp (np.ndarray): numerator polynomial coefficients of linear predictor
+    a_lp (np.ndarray): denominator polynomial coefficients of linear predictor
+    '''
+    N = len(x)
+    # Compute M-th order autocorrelation function
+    rx = np.zeros(M+1)
+    for i in range(M+1):
+        rx[i] = np.dot(x[0:N-i], x[i:N])
+    # Prepare M-by-M Toeplitz covariance matrix
+    covmatrix = np.zeros([M, M])
+    for i in range(M):
+        covmatrix[i, i:M] = rx[0:M-i]
+        covmatrix[i:M, i] = rx[0:M-i]
+    # Solve "normal equations" for prediction coefficients
+    a_coeffs = np.linalg.lstsq(-covmatrix, rx[1:M+1], rcond=None)[0]
+    a_lp = np.array([1] + list(a_coeffs)) # LP polynomial A(z)
+    b_lp = np.array([1])
+    return b_lp, a_lp
+
+
+def get_spectral_envelope_lp(x, fs, M=12):
+    '''
+    Computes spectral envelope of a given signal via "Linear Prediction".
+    Implementation is ported from:
+    https://ccrma.stanford.edu/~jos/sasp/Spectral_Envelope_Linear_Prediction.html
+    
+    Args
+    ----
+    x (np.ndarray): input waveform (Pa)
+    fs (int): sampling rate (Hz)
+    M (int): order of the linear predictor
+    
+    Returns
+    -------
+    freqs (np.ndarray): frequency vector (Hz)
+    lp_spectral_envelope (np.ndarray): spectral envelope (dB)
+    '''
+    b_lp, a_lp = get_spectral_envelope_lp_coefficients(x, M=M)
+    freqs, h = scipy.signal.freqz(b_lp, a_lp, len(x), fs=fs)
+    lp_spectral_envelope = 20 * np.log10(np.abs(h))
+    return freqs, lp_spectral_envelope
