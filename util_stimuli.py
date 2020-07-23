@@ -485,7 +485,6 @@ def get_power_spectrum_from_mfcc(mfcc, Minv):
     mel_power_spectrum = np.exp(scipy.fftpack.idct(mfcc, norm='ortho'))
     power_spectrum = np.matmul(Minv, mel_power_spectrum)
     power_spectrum[power_spectrum < 0] = 0
-    power_spectrum = np.sqrt(power_spectrum)
     return power_spectrum
 
 
