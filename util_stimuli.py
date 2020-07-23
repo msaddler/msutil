@@ -3,6 +3,7 @@ import os
 import numpy as np
 import scipy.interpolate
 import scipy.signal
+import scipy.fftpack
 
 
 def rms(x):
@@ -461,3 +462,39 @@ def get_spectral_envelope_lp(x, fs, M=12):
     freqs, h = scipy.signal.freqz(b_lp, a_lp, len(x), fs=fs)
     lp_spectral_envelope = 20 * np.log10(np.abs(h))
     return freqs, lp_spectral_envelope
+
+
+def get_mfcc(x, M):
+    '''
+    Compute vector of Mel-frequency cepstral coefficients (mfcc) for a
+    given frame (x) and Mel-scale filterbank (M).
+    M must have shape [n_fft, n_mels].
+    '''
+    power_spectrum = np.square(np.abs(np.fft.rfft(x)))
+    mel_power_spectrum = np.matmul(M, power_spectrum)
+    mfcc = scipy.fftpack.dct(np.log(mel_power_spectrum), norm='ortho')
+    return mfcc
+
+
+def get_power_spectrum_from_mfcc(mfcc, Minv):
+    '''
+    Compute power spectrum from a given vector of Mel-frequency cepstral
+    coefficients (mfcc) and a pseudo-inverse Mel-scale filterbank (Minv).
+    M must have shape [n_mels, n_fft].
+    '''
+    mel_power_spectrum = np.exp(scipy.fftpack.idct(mfcc, norm='ortho'))
+    power_spectrum = np.matmul(Minv, mel_power_spectrum)
+    power_spectrum[power_spectrum < 0] = 0
+    power_spectrum = np.sqrt(power_spectrum)
+    return power_spectrum
+
+
+def impose_power_spectrum(x, power_spectrum):
+    '''
+    Impose power spectrum in frequency domain by multiplying FFT of a
+    frame (x) with the given power spectrum and applying inverse FFT.
+    power_spectrum must have same shape as the rfft of x.
+    '''
+    x_fft = np.fft.rfft(x, norm='ortho')
+    x_fft *= power_spectrum
+    return np.fft.irfft(x_fft, norm='ortho')
