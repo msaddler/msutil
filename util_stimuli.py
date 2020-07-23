@@ -492,9 +492,9 @@ def get_power_spectrum_from_mfcc(mfcc, Minv):
 def impose_power_spectrum(x, power_spectrum):
     '''
     Impose power spectrum in frequency domain by multiplying FFT of a
-    frame (x) with the given power spectrum and applying inverse FFT.
-    power_spectrum must have same shape as the rfft of x.
+    frame (x) with square root of the given power_spectrum and applying
+    inverse FFT. power_spectrum must have same shape as the rfft of x.
     '''
     x_fft = np.fft.rfft(x, norm='ortho')
-    x_fft *= power_spectrum
+    x_fft *= np.sqrt(power_spectrum)
     return np.fft.irfft(x_fft, norm='ortho')
