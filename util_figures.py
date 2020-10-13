@@ -221,6 +221,7 @@ def make_stimulus_summary_plot(ax_arr,
                                       treset=True,
                                       vmin=None,
                                       vmax=None,
+                                      erb_freq_axis=True,
                                       spines_to_hide_waveform=[],
                                       spines_to_hide_spectrum=[],
                                       spines_to_hide_excitation=[],
@@ -277,13 +278,18 @@ def make_stimulus_summary_plot(ax_arr,
             IDX = np.logical_and(fxx >= np.min(cfs), fxx <= np.max(cfs))
             pxx = pxx[IDX]
             fxx = fxx[IDX]
-        fxx = util_stimuli.freq2erb(fxx)
-        xlimits_buffer_pxx = limits_buffer * np.max(pxx)
-        ylimits_fxx = [np.min(fxx), np.max(fxx)]
-        xlimits_pxx = [np.max(pxx) * (1 + limits_buffer), 0] # Reverses x-axis
+        xlimits_pxx = [np.max(pxx) * (1 + limits_buffer), 0] # Reverses x-axis                                                                                                     
         xlimits_pxx = np.ceil(np.array(xlimits_pxx) * 5) / 5
-        yticks = np.linspace(ylimits_fxx[0], ylimits_fxx[-1], nyticks)
-        yticklabels = ['{:.0f}'.format(yt) for yt in util_stimuli.erb2freq(yticks)]
+        if erb_freq_axis:
+            fxx = util_stimuli.freq2erb(fxx)
+            xlimits_buffer_pxx = limits_buffer * np.max(pxx)
+            ylimits_fxx = [np.min(fxx), np.max(fxx)]
+            yticks = np.linspace(ylimits_fxx[0], ylimits_fxx[-1], nyticks)
+            yticklabels = ['{:.0f}'.format(yt) for yt in util_stimuli.erb2freq(yticks)]
+        else:
+            ylimits_fxx = [np.min(fxx), np.max(fxx)]
+            yticks = np.linspace(ylimits_fxx[0], ylimits_fxx[-1], nyticks)
+            yticklabels = ['{:.0f}'.format(yt) for yt in yticks]
         make_line_plot(ax_arr[ax_idx_spectrum],
                        pxx,
                        fxx,
