@@ -336,10 +336,15 @@ def make_stimulus_summary_plot(ax_arr,
     # Plot stimulus excitation pattern
     if ax_idx_excitation is not None:
         ax_idx_list.append(ax_idx_excitation)
-        x_exc = np.mean(nervegram, axis=1)
-        y_exc = np.arange(0, nervegram.shape[0])
+        if np.all(np.mod(nervegram, 1) == 0):
+            # Compute mean firing rate from spike counts if all values are integers
+            x_exc = np.sum(nervegram, axis=1) / (nervegram.shape[1] / sr_nervegram)
+        else:
+            # Otherwise, compute mean firing rates from instantaneous firing rates
+            x_exc = np.mean(nervegram, axis=1)
         xlimits_exc = [0, np.max(x_exc) * (1 + limits_buffer)]
         xlimits_exc = np.ceil(np.array(xlimits_exc)/10) * 10
+        y_exc = np.arange(0, nervegram.shape[0])
         ylimits_exc = [np.min(y_exc), np.max(y_exc)]
         make_line_plot(ax_arr[ax_idx_excitation],
                        x_exc,
