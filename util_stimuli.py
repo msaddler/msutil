@@ -503,7 +503,7 @@ def nnresample_poly_filter(up, down, beta=5.0, window_length=16001):
     '''
     Builds an anti-aliasing lowpass filter with cutoff approximately equal
     to (1/2) * INITIAL_SAMPLING_RATE * up / down.
-    Null-on-nyquist anti-aliasing filter implementation based on:
+    Null-on-Nyquist anti-aliasing filter implementation based on:
     https://github.com/jthiem/nnresample/blob/master/nnresample/nnresample.py
     
     Args
@@ -542,3 +542,61 @@ def nnresample_poly_filter(up, down, beta=5.0, window_length=16001):
     shifted_filt = scipy.signal.fir_filter_design.firwin(window_length, -firstnull+2/max_rate,
                                                          window=('kaiser', beta))
     return shifted_filt
+
+
+def tfnnresample(tensor_input,
+                 sr_input,
+                 sr_output,
+                 kwargs_nnresample_poly_filter={}):
+    '''
+    Tensorflow function for resampling time-domain signals.
+    Null-on-Nyquist anti-aliasing lowpass filter is applied.
+    
+    Args
+    ----
+    tensor_input (tensor): input tensor with shape [batch, time, channels]
+    sr_input (int): input sampling rate in Hz
+    sr_output (int): output sampling rate  in Hz
+    kwargs_nnresample_poly_filter (dict): keyword arguments for nnresample_poly_filter
+    
+    Returns
+    -------
+    tensor_input_resampled (tensor): resampled tensor with shape [batch, time, channels]
+    '''
+    # Import tensorflow only as needed
+    import tensorflow as tf
+    # Check tensor_input has the expected dimensions: [batch, time, channels]
+    assert len(tensor_input.shape) == 3, "`tensor_input` must have shape [batch, time, channels]"
+    # Compute upsample and downsample factors
+    greatest_common_divisor = np.gcd(int(sr_output), int(sr_input))
+    up = int(sr_output) // greatest_common_divisor
+    down = int(sr_input) // greatest_common_divisor
+    # First upsample by a factor of `up` by adding `up-1` zeros between each sample in original signal
+    nzeros = up - 1
+    if nzeros > 0:
+        paddings = [[0,0],[0,1],[0,0]] # This will add a zero at the end of the time dimension
+        tensor_input_padded = tf.pad(tensor_input,
+                                     paddings,
+                                     mode='CONSTANT',
+                                     constant_values=0)
+        indices = []
+        for idx in range(tensor_input.shape[1]):
+            indices.append(idx)
+            indices.extend([-1] * nzeros) # This will insert nzeros zeros between each sample
+        tensor_input_upsampled = tf.gather(tensor_input_padded, indices, axis=1)
+    else:
+        tensor_input_upsampled = tensor_input
+    # Next construct the lowpass anti-aliasing filter
+    if kwargs_nnresample_poly_filter.get('window_length', None) is None:
+        kwargs_nnresample_poly_filter['window_length'] = tensor_input_upsampled.shape[1].value
+    aa_filter_ir = nnresample_poly_filter(up, down, **kwargs_nnresample_poly_filter)
+    aa_filter_ir_tensor = tf.constant(aa_filter_ir, dtype=tensor_input.dtype)
+    aa_filter_ir_tensor = tf.expand_dims(aa_filter_ir_tensor, axis=1)
+    aa_filter_ir_tensor = tf.expand_dims(aa_filter_ir_tensor, axis=2)
+    # Apply the lowpass filter and downsample in one step via strided convolution
+    tensor_input_resampled = tf.nn.conv1d(tensor_input_upsampled,
+                                          aa_filter_ir_tensor,
+                                          stride=down,
+                                          padding='SAME',
+                                          data_format='NWC')
+    return tensor_input_resampled
