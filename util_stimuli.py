@@ -497,3 +497,48 @@ def impose_power_spectrum(x, power_spectrum):
     x_fft = np.fft.rfft(x, norm='ortho')
     x_fft *= np.sqrt(power_spectrum)
     return np.fft.irfft(x_fft, norm='ortho')
+
+
+def nnresample_poly_filter(up, down, beta=5.0, window_length=16001):
+    '''
+    Builds an anti-aliasing lowpass filter with cutoff approximately equal
+    to (1/2) * INITIAL_SAMPLING_RATE * up / down.
+    Null-on-nyquist anti-aliasing filter implementation based on:
+    https://github.com/jthiem/nnresample/blob/master/nnresample/nnresample.py
+    
+    Args
+    ----
+    up (int): upsampling factor
+    down (int): downsampling factor
+    beta (float): Kaiser window shape parameter
+    window_length (int): finite impulse response window length
+    
+    Returns
+    -------
+    shifted_filt (np.array of shape [window_length]): filter impulse response
+    '''
+    # Ensure the specifed upsampling and downsampling factors are efficient
+    # (rational approximation to save computation time on really long signals)
+    # *** this code block was stolen from scipy.signal.resample_poly ***
+    greatest_common_divisor = np.gcd(up, down)
+    up = up // greatest_common_divisor
+    down = down // greatest_common_divisor
+    max_rate = np.max([up, down])
+    sfact = np.sqrt(1+(beta/np.pi)**2)
+    # Generate first filter attempt (6dB attenuation at f_c).
+    filt = scipy.signal.fir_filter_design.firwin(window_length, 1/max_rate,
+                                                 window=('kaiser', beta))
+    # Compute frequency response of the first filter
+    N_FFT = 2**19
+    NBINS = N_FFT/2+1
+    paddedfilt = np.zeros(N_FFT)
+    paddedfilt[:window_length] = filt
+    ffilt = np.fft.rfft(paddedfilt)
+    # Find the minimum between f_c and f_c+sqrt(1+(beta/pi)^2)/window_length
+    bot = int(np.floor(NBINS/max_rate))
+    top = int(np.ceil(NBINS*(1/max_rate + 2*sfact/window_length)))
+    firstnull = (np.argmin(np.abs(ffilt[bot:top])) + bot)/NBINS
+    # Generate a shifted filter with the cutoff on the first null
+    shifted_filt = scipy.signal.fir_filter_design.firwin(window_length, -firstnull+2/max_rate,
+                                                         window=('kaiser', beta))
+    return shifted_filt
