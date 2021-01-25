@@ -554,19 +554,32 @@ def tfnnresample(tensor_input,
     
     Args
     ----
-    tensor_input (tensor): input tensor with shape [batch, time, channels]
+    tensor_input (tensor): input tensor to be resampled along time dimension (expects shape
+        [batch, time], [batch, freq, time], or [batch, freq, time, 1])
     sr_input (int): input sampling rate in Hz
     sr_output (int): output sampling rate  in Hz
-    kwargs_nnresample_poly_filter (dict): keyword arguments for nnresample_poly_filter
+    kwargs_nnresample_poly_filter (dict): keyword arguments for nnresample_poly_filter,
+        which can be used to alter cutoff frequency of anti-aliasing lowpass filter
+        (defaults to (1/2) * sr_output)
     
     Returns
     -------
-    tensor_input_resampled (tensor): resampled tensor with shape [batch, time, channels]
+    tensor_input_resampled (tensor): resampled tensor with shape matched to tensor_input
     '''
     # Import tensorflow only as needed
     import tensorflow as tf
-    # Check tensor_input has the expected dimensions: [batch, time, channels]
-    assert len(tensor_input.shape) == 3, "`tensor_input` must have shape [batch, time, channels]"
+    # Expand dimensions of input tensor to [batch, freq, time, channels] for 2d conv operation
+    if len(tensor_input.shape) == 2:
+        print('[tfnnresample] interpreting `tensor_input.shape` as [batch, time]')
+        tensor_input_expanded = tensor_input[:, tf.newaxis, :, tf.newaxis]
+    elif len(tensor_input.shape) == 3:
+        print('[tfnnresample] interpreting `tensor_input.shape` as [batch, freq, time]')
+        tensor_input_expanded = tensor_input[:, :, :, tf.newaxis]
+    else:
+        print('[tfnnresample] interpreting `tensor_input.shape` as [batch, freq, time, channels]')
+        tensor_input_expanded = tensor_input
+    msg = "dimensions of `tensor_input` must support re-shaping to [batch, freq, time, 1]"
+    assert (len(tensor_input_expanded.shape) == 4) and (tensor_input_expanded.shape[-1] == 1), msg
     # Compute upsample and downsample factors
     greatest_common_divisor = np.gcd(int(sr_output), int(sr_input))
     up = int(sr_output) // greatest_common_divisor
@@ -574,29 +587,48 @@ def tfnnresample(tensor_input,
     # First upsample by a factor of `up` by adding `up-1` zeros between each sample in original signal
     nzeros = up - 1
     if nzeros > 0:
-        paddings = [[0,0],[0,1],[0,0]] # This will add a zero at the end of the time dimension
-        tensor_input_padded = tf.pad(tensor_input,
+        paddings = [[0,0],[0,0],[0,1],[0,0]] # This will add a zero at the end of the time dimension
+        tensor_input_padded = tf.pad(tensor_input_expanded,
                                      paddings,
                                      mode='CONSTANT',
                                      constant_values=0)
         indices = []
-        for idx in range(tensor_input.shape[1]):
+        for idx in range(tensor_input_expanded.shape[2]):
             indices.append(idx)
             indices.extend([-1] * nzeros) # This will insert nzeros zeros between each sample
-        tensor_input_upsampled = tf.gather(tensor_input_padded, indices, axis=1)
+        tensor_input_upsampled = tf.gather(tensor_input_padded, indices, axis=2)
     else:
-        tensor_input_upsampled = tensor_input
-    # Next construct the lowpass anti-aliasing filter
+        tensor_input_upsampled = tensor_input_expanded
+    # Next construct lowpass anti-aliasing filter (kwargs_nnresample_poly_filter will override up/down)
+    kwargs_nnresample_poly_filter = dict(kwargs_nnresample_poly_filter) # prevents modifying in-place
+    if kwargs_nnresample_poly_filter.get('up', None) is None:
+        kwargs_nnresample_poly_filter['up'] = up
+    else:
+        print('[tfnnresample] using up={} rather than up={} for nnresample_poly_filter'.format(
+            kwargs_nnresample_poly_filter['up'], up))
+    if kwargs_nnresample_poly_filter.get('down', None) is None:
+        kwargs_nnresample_poly_filter['down'] = down
+    else:
+        print('[tfnnresample] using down={} rather than down={} for nnresample_poly_filter'.format(
+            kwargs_nnresample_poly_filter['down'], down))
     if kwargs_nnresample_poly_filter.get('window_length', None) is None:
-        kwargs_nnresample_poly_filter['window_length'] = tensor_input_upsampled.shape[1].value
-    aa_filter_ir = nnresample_poly_filter(up, down, **kwargs_nnresample_poly_filter)
+        kwargs_nnresample_poly_filter['window_length'] = tensor_input_upsampled.shape[2].value
+        print('[tfnnresample] using window_length={} for nnresample_poly_filter'.format(
+            kwargs_nnresample_poly_filter['window_length']))
+    print('[tfnnresample] using cutoff frequency near {} Hz for anti-aliasing lowpass filter'.format(
+        (kwargs_nnresample_poly_filter['up']/kwargs_nnresample_poly_filter['down']) * (sr_input/2)))
+    aa_filter_ir = nnresample_poly_filter(**kwargs_nnresample_poly_filter)
     aa_filter_ir_tensor = tf.constant(aa_filter_ir, dtype=tensor_input.dtype)
-    aa_filter_ir_tensor = tf.expand_dims(aa_filter_ir_tensor, axis=1)
-    aa_filter_ir_tensor = tf.expand_dims(aa_filter_ir_tensor, axis=2)
+    aa_filter_ir_tensor = aa_filter_ir_tensor[tf.newaxis, :, tf.newaxis, tf.newaxis]
     # Apply the lowpass filter and downsample in one step via strided convolution
-    tensor_input_resampled = tf.nn.conv1d(tensor_input_upsampled,
+    tensor_input_resampled = tf.nn.conv2d(tensor_input_upsampled,
                                           aa_filter_ir_tensor,
-                                          stride=down,
+                                          strides=[1, 1, down, 1],
                                           padding='SAME',
-                                          data_format='NWC')
+                                          data_format='NHWC')
+    # Reshape resampled output tensor to match dimensions of input tensor
+    if len(tensor_input.shape) == 2:
+        tensor_input_resampled = tf.squeeze(tensor_input_resampled, axis=[1, -1])
+    elif len(tensor_input.shape) == 3:
+        tensor_input_resampled = tf.squeeze(tensor_input_resampled, axis=[-1])
     return tensor_input_resampled
