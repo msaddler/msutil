@@ -499,7 +499,7 @@ def impose_power_spectrum(x, power_spectrum):
     return np.fft.irfft(x_fft, norm='ortho')
 
 
-def nnresample_poly_filter(up, down, beta=5.0, window_length=16001):
+def nnresample_poly_filter(up, down, beta=5.0, window_length=16001, nnshift=True):
     '''
     Builds an anti-aliasing lowpass filter with cutoff approximately equal
     to (1/2) * INITIAL_SAMPLING_RATE * up / down.
@@ -512,7 +512,8 @@ def nnresample_poly_filter(up, down, beta=5.0, window_length=16001):
     down (int): downsampling factor
     beta (float): Kaiser window shape parameter
     window_length (int): finite impulse response window length
-    
+    nnshift (bool): shift anti-aliasing filter cutoff to move null-on-Nyquist
+
     Returns
     -------
     shifted_filt (np.array of shape [window_length]): filter impulse response
@@ -528,6 +529,9 @@ def nnresample_poly_filter(up, down, beta=5.0, window_length=16001):
     # Generate first filter attempt (6dB attenuation at f_c).
     filt = scipy.signal.fir_filter_design.firwin(window_length, 1/max_rate,
                                                  window=('kaiser', beta))
+    # If nnshift is set to False, simply return the first filter
+    if not nnshift:
+        return filt
     # Compute frequency response of the first filter
     N_FFT = 2**19
     NBINS = N_FFT/2+1
