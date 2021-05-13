@@ -207,30 +207,31 @@ def make_nervegram_plot(ax,
 
 
 def make_stimulus_summary_plot(ax_arr,
-                                      ax_idx_waveform=None,
-                                      ax_idx_spectrum=None,
-                                      ax_idx_nervegram=None,
-                                      ax_idx_excitation=None,
-                                      waveform=None,
-                                      nervegram=None,
-                                      sr_waveform=None,
-                                      sr_nervegram=None,
-                                      cfs=None,
-                                      tmin=None,
-                                      tmax=None,
-                                      treset=True,
-                                      vmin=None,
-                                      vmax=None,
-                                      erb_freq_axis=True,
-                                      spines_to_hide_waveform=[],
-                                      spines_to_hide_spectrum=[],
-                                      spines_to_hide_excitation=[],
-                                      nxticks=6,
-                                      nyticks=6,
-                                      kwargs_plot={},
-                                      limits_buffer=0.1,
-                                      ax_arr_clear_leftover=True,
-                                      **kwargs_format_axes):
+                               ax_idx_waveform=None,
+                               ax_idx_spectrum=None,
+                               ax_idx_nervegram=None,
+                               ax_idx_excitation=None,
+                               waveform=None,
+                               nervegram=None,
+                               sr_waveform=None,
+                               sr_nervegram=None,
+                               cfs=None,
+                               tmin=None,
+                               tmax=None,
+                               treset=True,
+                               vmin=None,
+                               vmax=None,
+                               n_anf=None,
+                               erb_freq_axis=True,
+                               spines_to_hide_waveform=[],
+                               spines_to_hide_spectrum=[],
+                               spines_to_hide_excitation=[],
+                               nxticks=6,
+                               nyticks=6,
+                               kwargs_plot={},
+                               limits_buffer=0.1,
+                               ax_arr_clear_leftover=True,
+                               **kwargs_format_axes):
     '''
     Helper function for generating waveform, power spectrum, nervegram, and excitation pattern
     plots to summarize a stimulus.
@@ -339,6 +340,9 @@ def make_stimulus_summary_plot(ax_arr,
         if np.all(np.mod(nervegram, 1) == 0):
             # Compute mean firing rate from spike counts if all values are integers
             x_exc = np.sum(nervegram, axis=1) / (nervegram.shape[1] / sr_nervegram)
+            if n_anf is not None:
+                # If a number of ANFs is specified, divide firing rate by n_anf
+                x_exc = x_exc / n_anf
         else:
             # Otherwise, compute mean firing rates from instantaneous firing rates
             x_exc = np.mean(nervegram, axis=1)
