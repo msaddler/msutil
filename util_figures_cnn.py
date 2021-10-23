@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches
 import matplotlib.transforms
 
-sys.path.append('/om2/user/msaddler/ibm_hearing_aid/ibmHearingAid/multi_gpu/')
+sys.path.append('/om2/user/msaddler/pitchnet/packages/tfutil')
 import functions_brain_network
 
 
@@ -176,6 +176,7 @@ def draw_cnn_from_layer_list(ax,
                              scaling_n='log2',
                              include_kernels=True,
                              input_image=None,
+                             input_image_shape=None,
                              gap_input_scale=2.0,
                              gap_interlayer=2.0,
                              gap_intralayer=0.2,
@@ -246,8 +247,10 @@ def draw_cnn_from_layer_list(ax,
     
     # Display the input image
     assert input_image is not None, "input_image is currently a required argument"
-    w = get_dim_from_raw_value(input_image.shape[1], range_dim=range_w, scaling=scaling_w)
-    h = get_dim_from_raw_value(input_image.shape[0], range_dim=range_h, scaling=scaling_h)
+    if input_image_shape is None:
+        input_image_shape = input_image.shape
+    w = get_dim_from_raw_value(input_image_shape[1], range_dim=range_w, scaling=scaling_w)
+    h = get_dim_from_raw_value(input_image_shape[0], range_dim=range_h, scaling=scaling_h)
     extent = np.array([xl-w/2, xl+w/2, yl-h/2, yl+h/2])
     im = ax.imshow(input_image,
                    extent=extent,
@@ -259,7 +262,7 @@ def draw_cnn_from_layer_list(ax,
         'w': w,
         'h': h,
         'zorder': zl,
-        'shape': input_image.shape,
+        'shape': input_image_shape,
     }
     zl += 1
     transform = get_affine_transform(center=(xl, yl), **kwargs_transform)
