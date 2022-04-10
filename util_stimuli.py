@@ -310,6 +310,39 @@ def erbspace(freq_min, freq_max, num):
     return freqs
 
 
+def get_hanning_window(fs, dur, ramp_dur, flat_onset, flat_offset):
+    '''
+    Helper function to get Hanning window with specified ramp duration
+    and onset / offset times. Window has shape `_,/'--'\,_` where single
+    apostrophes are timestamps set by `flat_onset` and `flat_offset` and
+    the with of a slash is set by `ramp_dur`.
+    
+    Args
+    ----
+    fs (int): sampling rate in Hz
+    dur (float): total window size (s)
+    ramp_dur (float): one-sided ramp duration (s)
+    flat_onset (float): timestamp for onset of flat portion of window (s)
+    flat_offset (float): timestamp for offset of flat portion of window (s)
+    
+    Returns
+    -------
+    window (np.ndarray): array with shape [int(dur * fs)]
+    '''
+    window = np.zeros([int(dur * fs)])
+    idx_flat_onset = int(flat_onset * fs)
+    idx_flat_offset = int(flat_offset * fs)
+    window[idx_flat_onset:idx_flat_offset] = 1
+    idx_ramp = int(ramp_dur * fs)
+    msg = "Invalid combination of dur, ramp_dur, flat_onset, flat_offset"
+    assert idx_flat_onset-idx_ramp >= 0, msg
+    assert idx_flat_offset+idx_ramp <= int(dur * fs), msg
+    ramp = np.hanning(2 * idx_ramp)
+    window[idx_flat_onset-idx_ramp:idx_flat_onset] = ramp[:idx_ramp]
+    window[idx_flat_offset:idx_flat_offset+idx_ramp] = ramp[idx_ramp:]
+    return window
+
+
 def TENoise(fs,
             dur,
             lco=None,
