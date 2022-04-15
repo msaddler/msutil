@@ -145,7 +145,7 @@ def make_nervegram_plot(ax,
                         treset=True,
                         vmin=None,
                         vmax=None,
-                        interpolation=None,
+                        interpolation='none',
                         vticks=None,
                         str_clabel=None,
                         **kwargs_format_axes):
