@@ -145,6 +145,7 @@ def make_nervegram_plot(ax,
                         treset=True,
                         vmin=None,
                         vmax=None,
+                        interpolation=None,
                         vticks=None,
                         str_clabel=None,
                         **kwargs_format_axes):
@@ -178,7 +179,8 @@ def make_nervegram_plot(ax,
                              extent=[0, nervegram.shape[1], 0, nervegram.shape[0]],
                              cmap=cmap,
                              vmin=vmin,
-                             vmax=vmax)
+                             vmax=vmax,
+                             interpolation=interpolation)
     # Add colorbar if `cbar_on == True`
     if cbar_on:
         cbar = matplotlib.pyplot.colorbar(im_nervegram, ax=ax, pad=0.02)
@@ -221,6 +223,7 @@ def make_stimulus_summary_plot(ax_arr,
                                treset=True,
                                vmin=None,
                                vmax=None,
+                               interpolation='none',
                                n_anf=None,
                                erb_freq_axis=True,
                                spines_to_hide_waveform=[],
@@ -331,6 +334,7 @@ def make_stimulus_summary_plot(ax_arr,
                             treset=treset,
                             vmin=vmin,
                             vmax=vmax,
+                            interpolation=interpolation,
                             str_xlabel=nervegram_str_xlabel,
                             str_ylabel=nervegram_str_ylabel)
     
