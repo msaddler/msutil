@@ -279,10 +279,12 @@ def make_stimulus_summary_plot(ax_arr,
         ax_idx_list.append(ax_idx_spectrum)
         fxx, pxx = util_stimuli.power_spectrum(waveform, sr_waveform)
         if cfs is not None:
+            msg = "Frequency axes will not align when highest CF exceeds Nyquist"
+            assert np.max(cfs) <= np.max(fxx), msg
             IDX = np.logical_and(fxx >= np.min(cfs), fxx <= np.max(cfs))
             pxx = pxx[IDX]
             fxx = fxx[IDX]
-        xlimits_pxx = [np.max(pxx) * (1 + limits_buffer), 0] # Reverses x-axis                                                                                                     
+        xlimits_pxx = [np.max(pxx) * (1 + limits_buffer), 0] # Reverses x-axis
         xlimits_pxx = np.ceil(np.array(xlimits_pxx) * 5) / 5
         if erb_freq_axis:
             fxx = util_stimuli.freq2erb(fxx)
