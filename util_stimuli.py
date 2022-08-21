@@ -69,6 +69,51 @@ def combine_signal_and_noise(signal, noise, snr, mean_subtract=True):
     return signal_and_noise
 
 
+def pad_or_trim_to_len(x, n, mode='both', kwargs_pad={}):
+    '''
+    Increases or decreases the length of a one-dimensional signal
+    by either padding or triming the array. If the difference
+    between `len(x)` and `n` is odd, this function will default to
+    adding/removing the extra sample at the end of the signal.
+    
+    Args
+    ----
+    x (np.ndarray): one-dimensional input signal
+    n (int): length of output signal
+    mode (str): specify which end of signal to modify
+        (default behavior is to symmetrically modify both ends)
+    kwargs_pad (dict): keyword arguments for np.pad function
+    
+    Returns
+    -------
+    x_out (np.ndarray): one-dimensional signal with length `n`
+    '''
+    assert len(np.array(x).shape) == 1, "input must be 1D array"
+    assert mode.lower() in ['both', 'start', 'end']
+    n_diff = np.abs(len(x) - n)
+    if len(x) > n:
+        if mode.lower() == 'end':
+            x_out = x[:n]
+        elif mode.lower() == 'start':
+            x_out = x[-n:]
+        else:
+            x_out = x[int(np.floor(n_diff / 2)):-int(np.ceil(n_diff / 2))]
+    elif len(x) < n:
+        if mode.lower() == 'end':
+            pad_width = [0, n_diff]
+        elif mode.lower() == 'start':
+            pad_width = [n_diff, 0]
+        else:
+            pad_width = [int(np.floor(n_diff / 2)), int(np.ceil(n_diff / 2))]
+        kwargs = {'mode': 'constant'}
+        kwargs.update(kwargs_pad)
+        x_out = np.pad(x, pad_width, **kwargs)
+    else:
+        x_out = x
+    assert len(x_out) == n
+    return x_out
+
+
 def power_spectrum(x, fs, rfft=True, dBSPL=True):
     '''
     Helper function for computing power spectrum of sound wave.
