@@ -355,6 +355,13 @@ def erbspace(freq_min, freq_max, num):
     return freqs
 
 
+def loguniform(low, high, size=None):
+    '''
+    Helper function to draw samples uniformly on a log scale.
+    '''
+    return np.exp(np.random.uniform(low=np.log(low), high=np.log(high), size=size))
+
+
 def get_hanning_window(fs, dur, ramp_dur, flat_onset, flat_offset):
     '''
     Helper function to get Hanning window with specified ramp duration
