@@ -9,73 +9,38 @@ import matplotlib.pyplot as plt
 import matplotlib.patches
 import matplotlib.transforms
 
-sys.path.append('/om2/user/msaddler/pitchnet/packages/tfutil')
-import functions_brain_network
+sys.path.append('/om2/user/msaddler/tfauditoryutil')
+import util_network
 
 
-def load_json(json_fn):
-    '''
-    Helper function loads JSON file.
-    '''
-    with open(json_fn) as json_f:
-        json_contents = json.load(json_f)
-    return json_contents
-
-
-def process_cnn_layer_list(brain_net_architecture,
+def process_cnn_layer_list(fn_arch,
                            input_shape=[100, 1000],
                            n_classes_dict={'f0_label':700}):
-    '''
-    Helper function loads (if needed) and builds brain network architecture to collect
-    shapes of all activations and convolutional kernels.
-    
-    Args
-    ----
-    brain_net_architecture (list or str): brain network architecture list of JSON filename
-    input_shape (list): shape of brain network input tensor
-    n_classes_dict (dict): keys are the task paths, values are the number of classes for the task
-    
-    Returns
-    -------
-    list_layer_dict (list): list of dictionaries describing each network layer
-        (formatted for `draw_cnn_from_layer_list` function)
-    '''
-    if isinstance(brain_net_architecture, list):
-        brain_arch_layer_list = brain_net_architecture
-    elif isinstance(brain_net_architecture, str):
-        brain_arch_layer_list = load_json(brain_net_architecture)
-    else:
-        raise ValueError("Unrecognized input type: {}".format(type(brain_net_architecture)))
-    
-    tf.reset_default_graph()
-    if not input_shape[0] == 1:
-        input_shape = [1] + list(input_shape)
-    while len(input_shape) < 4:
-        input_shape = input_shape + [1]
-    input_tensor = tf.placeholder(tf.float32, shape=input_shape, name='input_tensor')
-    output_tensor, nets = functions_brain_network.make_brain_net(input_tensor,
-                                                                 n_classes_dict,
-                                                                 brain_arch_layer_list)
-    list_layer_dict = []
-    for brain_arch_layer in brain_arch_layer_list:
-        layer_name = brain_arch_layer['args']['name']
-        layer_type = brain_arch_layer['layer_type']
-        if isinstance(nets[layer_name], dict):
-            # Quick patch for dealing with multiple task outputs in network (grabs first)
-            nets[layer_name] = nets[layer_name][sorted(nets[layer_name].keys())[0]]
-        shape_activations = nets[layer_name].shape.as_list()
-        shape_activations.pop(0)
-        layer_dict = {
+    """
+    """
+    with open(fn_arch, 'r') as f:
+        list_layer_dict = json.load(f)
+    tf.keras.backend.clear_session()
+    inputs = tf.keras.Input(shape=input_shape, batch_size=1, dtype=tf.float32)
+    outputs, _ = util_network.build_network(inputs, list_layer_dict, n_classes_dict=n_classes_dict)
+    model = tf.keras.Model(inputs=inputs, outputs=outputs)    
+    list_processed_layer_dict = []
+    for layer_dict in list_layer_dict:
+        layer_name = layer_dict['args']['name']
+        layer_type = layer_dict['layer_type']
+        shape_activations = list(model.get_layer(layer_name).output.shape)[1:]
+        processed_layer_dict = {
             'layer_name': layer_name,
             'layer_type': layer_type,
             'shape_activations': shape_activations,
         }
-        if 'kernel_size' in brain_arch_layer['args']:
-            layer_dict['shape_kernel'] = brain_arch_layer['args']['kernel_size']
-        if 'strides' in brain_arch_layer['args']:
-            layer_dict['strides'] = brain_arch_layer['args']['strides']
-        list_layer_dict.append(layer_dict)
-    return list_layer_dict
+        if 'kernel_size' in layer_dict['args']:
+            processed_layer_dict['shape_kernel'] = layer_dict['args']['kernel_size']
+        if 'strides' in layer_dict['args']:
+            processed_layer_dict['strides'] = layer_dict['args']['strides']
+        list_processed_layer_dict.append(processed_layer_dict)
+    return list_processed_layer_dict
+
 
 
 def get_xy_from_center(center=(0, 0), w=1.0, h=1.0):
@@ -180,6 +145,7 @@ def draw_cnn_from_layer_list(ax,
                              gap_input_scale=2.0,
                              gap_interlayer=2.0,
                              gap_intralayer=0.2,
+                             gap_output=0,
                              deg_scale_x=60,
                              deg_skew_y=30,
                              deg_fc=0,
@@ -247,36 +213,43 @@ def draw_cnn_from_layer_list(ax,
     
     # Display the input image
     assert input_image is not None, "input_image is currently a required argument"
-    if input_image_shape is None:
-        input_image_shape = input_image.shape
+    while len(input_image.shape) < 3:
+        input_image = input_image[..., np.newaxis]
+    input_image_shape = input_image.shape
     w = get_dim_from_raw_value(input_image_shape[1], range_dim=range_w, scaling=scaling_w)
     h = get_dim_from_raw_value(input_image_shape[0], range_dim=range_h, scaling=scaling_h)
-    extent = np.array([xl-w/2, xl+w/2, yl-h/2, yl+h/2])
-    im = ax.imshow(input_image,
-                   extent=extent,
-                   zorder=zl,
-                   **kwargs_imshow)
-    args_image = {
-        'x': xl,
-        'y': yl,
-        'w': w,
-        'h': h,
-        'zorder': zl,
-        'shape': input_image_shape,
-    }
-    zl += 1
-    transform = get_affine_transform(center=(xl, yl), **kwargs_transform)
-    im.set_transform(transform + ax.transData)
-    M = transform.transform(extent.reshape([2, 2]).T)
-    dx_arrow = np.min([M[-1, 0]-xl, gap_interlayer * gap_input_scale])
-    ax.arrow(x=xl, y=yl, dx=dx_arrow, dy=0, zorder=zl, **kwargs_arrow_gap)
-    zl += 1
-    xl += gap_interlayer * gap_input_scale
+    n_channel = input_image.shape[-1]
+    for itr_channel in range(n_channel):
+        extent = np.array([xl-w/2, xl+w/2, yl-h/2, yl+h/2])
+        im = ax.imshow(
+            input_image[:, :, itr_channel],
+            extent=extent,
+            zorder=zl,
+            **kwargs_imshow)
+        args_image = {
+            'x': xl,
+            'y': yl,
+            'w': w,
+            'h': h,
+            'zorder': zl,
+            'shape': [input_image_shape[0], input_image_shape[1]],
+        }
+        zl += 1
+        transform = get_affine_transform(center=(xl, yl), **kwargs_transform)
+        im.set_transform(transform + ax.transData)
+        M = transform.transform(extent.reshape([2, 2]).T)
+        dx_arrow = np.min([M[-1, 0]-xl, gap_interlayer * gap_input_scale])
+        ax.arrow(x=xl, y=yl, dx=dx_arrow, dy=0, zorder=zl, **kwargs_arrow_gap)
+        if itr_channel < n_channel - 1:
+            xl += gap_intralayer * gap_input_scale * 2.5
+        zl += 1
+        
+#         # Quick hack to ensure that ax.dataLim.bounds accounts for input image
+#         [xb, yb, dxb, dyb] = ax.dataLim.bounds
+#         xb_error = np.min(M[:, 0]) - xb
+#         ax.dataLim.bounds = [xb+xb_error, yb, 0, dyb]
     
-    # Quick hack to ensure that ax.dataLim.bounds accounts for input image
-    [xb, yb, dxb, dyb] = ax.dataLim.bounds
-    xb_error = np.min(M[:, 0]) - xb
-    ax.dataLim.bounds = [xb+xb_error, yb, 0, dyb]
+    xl += gap_interlayer * gap_input_scale
     
     # Display the network architecture
     kernel_to_connect = False
@@ -288,14 +261,15 @@ def draw_cnn_from_layer_list(ax,
                 args_kernel = {
                     'shape': layer['shape_kernel'],
                 }
-                ax, args_image, args_kernel = draw_conv_kernel_on_image(ax,
-                                                                        args_image=args_image,
-                                                                        args_kernel=args_kernel,
-                                                                        kwargs_polygon_kernel=kwargs_polygon_kernel,
-                                                                        kwargs_polygon_kernel_line=kwargs_polygon_kernel_line,
-                                                                        kwargs_transform=kwargs_transform,
-                                                                        kernel_x_shift=kernel_x_shift,
-                                                                        kernel_y_shift=kernel_y_shift)
+                ax, args_image, args_kernel = draw_conv_kernel_on_image(
+                    ax,
+                    args_image=args_image,
+                    args_kernel=args_kernel,
+                    kwargs_polygon_kernel=kwargs_polygon_kernel,
+                    kwargs_polygon_kernel_line=kwargs_polygon_kernel_line,
+                    kwargs_transform=kwargs_transform,
+                    kernel_x_shift=kernel_x_shift,
+                    kernel_y_shift=kernel_y_shift)
                 kernel_to_connect = True
             # Draw convolutional layer activations as stacked rectangles
             [h, w, n] = layer['shape_activations']
@@ -322,25 +296,28 @@ def draw_cnn_from_layer_list(ax,
                     vertex_output_y = args_image['y'] + args_kernel['y_shift'] * (args_image['h'] / 2)
                     vertex_output = transform.transform(np.array([vertex_output_x, vertex_output_y]))
                     for vertex_input in args_kernel['vertices']:
-                        ax.plot([vertex_input[0], vertex_output[0]],
-                                [vertex_input[1], vertex_output[1]],
-                                **kwargs_polygon_kernel_line,
-                                zorder=args_kernel['zorder'])
+                        ax.plot(
+                            [vertex_input[0], vertex_output[0]],
+                            [vertex_input[1], vertex_output[1]],
+                            **kwargs_polygon_kernel_line,
+                            zorder=args_kernel['zorder'])
                     kernel_to_connect = False
                 if itr_sublayer == n-1:
                     dx_arrow = transform.transform(xy)[-1, 0]-xl
-                    ax.arrow(x=xl,
-                             y=yl,
-                             dx=dx_arrow,
-                             dy=0,
-                             zorder=zl,
-                             **kwargs_arrow_gap)
+                    ax.arrow(
+                        x=xl,
+                        y=yl,
+                        dx=dx_arrow,
+                        dy=0,
+                        zorder=zl,
+                        **kwargs_arrow_gap)
                     zl += 1
                 zl += 1
                 xl += gap_intralayer
             xl += gap_interlayer
         # Draw fully-connected layer
         elif ('dense' in layer['layer_type']) or ('top' in layer['layer_type']):
+            xl += gap_output
             n = layer['shape_activations'][0]
             w = gap_intralayer
             h = get_dim_from_raw_value(n, range_dim=None, scaling=scaling_n) * scale_fc
