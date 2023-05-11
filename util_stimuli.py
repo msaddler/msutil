@@ -69,6 +69,28 @@ def combine_signal_and_noise(signal, noise, snr, mean_subtract=True):
     return signal_and_noise
 
 
+def spatialize_sound(y, brir):
+    """
+    This takes a left-aligned BRIR and convolves it with a left-padded signal
+    (using "valid" padding) to produce the same output as "same" padding with
+    a center-aligned BRIR. It is faster to pad the signal than it is to pad
+    the BRIR.
+    
+    Args
+    ----
+    y (np.ndarray): monoaural waveform with shape [timesteps]
+    brir (np.ndarray): binaural room impulse response with shape [timesteps, 2]
+    
+    Returns
+    -------
+    y_spatialized (np.ndarray): binaural waveform with shape [timesteps, 2]
+    """
+    y_padded = np.pad(y, (brir.shape[0] - 1, 0))
+    y_spatialized_l = scipy.signal.convolve(y_padded, brir[:, 0], mode='valid', method='direct')
+    y_spatialized_r = scipy.signal.convolve(y_padded, brir[:, 1], mode='valid', method='direct')
+    return np.stack([y_spatialized_l, y_spatialized_r]).T
+
+
 def pad_or_trim_to_len(x, n, mode='both', kwargs_pad={}):
     '''
     Increases or decreases the length of a one-dimensional signal
