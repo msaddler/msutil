@@ -1,7 +1,7 @@
-import sys
 import os
-import numpy as np
+import sys
 import copy
+import numpy as np
 import matplotlib.pyplot
 import matplotlib.ticker
 import matplotlib.cm

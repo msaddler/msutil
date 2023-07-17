@@ -1,5 +1,6 @@
-import sys
 import os
+import sys
+import h5py
 import numpy as np
 import scipy.interpolate
 import scipy.signal
@@ -93,8 +94,8 @@ def load_brir(
     brir (np.ndarray): float array with shape [len(index_brir), taps, 2]
     sr or metadata (np.ndarray or dict): sampling rate in Hz or metadata dictionary
     """
-    assert isinstance(index_room, int)
-    assert isinstance(index_brir, (int, list))
+    assert isinstance(index_room, (np.integer, int))
+    assert isinstance(index_brir, (np.integer, int, list))
     with h5py.File(fn_pattern.format(index_room)) as f:
         if isinstance(index_brir, list):
             brir = np.array([f['brir'][_] for _ in index_brir])

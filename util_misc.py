@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 import json
 import h5py
 import copy
