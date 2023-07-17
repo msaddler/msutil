@@ -59,3 +59,12 @@ def recursive_dict_merge(dict1, dict2):
         else:
             result[key] = copy.deepcopy(dict2[key])
     return result
+
+
+def flatten_columns(df, sep='/'):
+    """
+    Flatten multi-level columns in a pandas DataFrame to single-level.
+    """
+    df.columns = [col[0] if (len(col[0]) == 0) or (len(col[1]) == 0) else sep.join(col)
+                  for col in df.columns.to_flat_index()]
+    return df
