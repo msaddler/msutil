@@ -81,6 +81,10 @@ def load_brir(
     See `manifest_room.pdpkl` and `manifest_brir.pdpkl` for individual room,
     listener position, and BRIR specifications.
     
+    For details of BRIR generation, see: https://github.mit.edu/msaddler/virtual_acoustic_room
+    Room manifest: /om2/user/msaddler/spatial_audio_pipeline/assets/brir/v00/manifest_room.pdpkl
+    BRIR manifest: /om2/user/msaddler/spatial_audio_pipeline/assets/brir/v00/manifest_brir.pdpkl
+    
     Args
     ----
     index_room (int): index of room specifies room and listener position (hdf5 file)
@@ -92,21 +96,18 @@ def load_brir(
     Returns
     -------
     brir (np.ndarray): float array with shape [len(index_brir), taps, 2]
-    sr or metadata (np.ndarray or dict): sampling rate in Hz or metadata dictionary
+    sr --or-- metadata (np.ndarray or dict): sampling rate in Hz or metadata dictionary
     """
-    assert isinstance(index_room, (np.integer, int))
-    assert isinstance(index_brir, (np.integer, int, list))
+    assert isinstance(index_room, (np.integer, int)), "index_room must be an int"
+    assert isinstance(index_brir, (np.integer, int, list)), "index_brir must be an int or int list"
+    index_brir = list(np.array(index_brir).reshape([-1]))
     with h5py.File(fn_pattern.format(index_room)) as f:
-        if isinstance(index_brir, list):
-            brir = np.array([f['brir'][_] for _ in index_brir])
-            sr = np.array([f['sr'][_] for _ in index_brir])
-        else:
-            brir = f['brir'][index_brir]
-            sr = f['brir'][index_brir]
+        brir = np.array([f['brir'][_] for _ in index_brir])
+        sr = np.array([f['sr'][_] for _ in index_brir])
         if return_metadata or verbose:
             metadata = {}
             for k in ['index_room', 'index_brir', 'sr', 'src_dist', 'src_azim', 'src_elev']:
-                metadata[k] = np.array([f[k][_] for _ in np.array(index_brir).reshape([-1])])
+                metadata[k] = np.array([f[k][_] for _ in index_brir])
             if verbose:
                 print(fn_pattern.format(index_room))
                 for k in metadata.keys():
@@ -133,8 +134,8 @@ def spatialize_sound(y, brir):
     y_spatialized (np.ndarray): binaural waveform with shape [timesteps, 2]
     """
     y_padded = np.pad(y, (brir.shape[0] - 1, 0))
-    y_spatialized_l = scipy.signal.convolve(y_padded, brir[:, 0], mode='valid', method='direct')
-    y_spatialized_r = scipy.signal.convolve(y_padded, brir[:, 1], mode='valid', method='direct')
+    y_spatialized_l = scipy.signal.convolve(y_padded, brir[:, 0], mode='valid', method='auto')
+    y_spatialized_r = scipy.signal.convolve(y_padded, brir[:, 1], mode='valid', method='auto')
     return np.stack([y_spatialized_l, y_spatialized_r]).T
 
 
